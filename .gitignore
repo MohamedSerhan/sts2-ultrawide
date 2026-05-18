@@ -6,6 +6,9 @@ dist/
 *.pck
 !assets/**/*.pck
 
+# Godot import cache (regenerated on demand)
+godot_project/.godot/
+
 # Godot
 .godot/
 .import/

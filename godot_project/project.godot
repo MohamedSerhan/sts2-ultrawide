@@ -1,0 +1,13 @@
+; STS2 Ultrawide mod — PCK packing project. Not a runnable game.
+
+config_version=5
+
+[application]
+
+config/name="sts2-ultrawide-pck"
+config/features=PackedStringArray("4.3")
+config/icon="res://icon.svg"
+
+[rendering]
+
+renderer/rendering_method="forward_plus"

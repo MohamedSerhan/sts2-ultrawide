@@ -44,6 +44,9 @@ public static class Mod
                 {
                     tree.Root.SizeChanged += OnViewportSizeChanged;
                     OnViewportSizeChanged();
+                    // Scan nodes that already exist (e.g. main-menu UI added before our subscription).
+                    _resolution?.ScanExistingTree(tree.Root);
+                    _hud?.ApplyToSubtree(tree.Root);
                 }
             }
             else

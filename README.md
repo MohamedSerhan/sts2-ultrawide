@@ -27,6 +27,13 @@ Local build (Windows):
 ./scripts/install.ps1    # copies the built mod into your STS2 install for testing
 ```
 
+## Known limitations (v0.1.0)
+
+- **Widened background art doesn't ship yet.** The mod will swap to wider plates if they're present, but v0.1 ships none — backgrounds fall back to vanilla 16:9. Outpainted plates land in a follow-up release.
+- **HUD anchor rules are starter values** matched against guessed node paths. Real validation happens in-game with `debug_overlay = true`; rules will be refined release-over-release.
+- **Multiplayer with mixed-aspect-ratio players is untested.** `affects_gameplay: false` in the manifest, so multiplayer should match-make, but visuals on other clients are untested.
+- **Pinned to STS2 v0.103.2.** Future game patches that rename UI nodes will require an updated `anchor_rules.json` and a new mod version.
+
 ## License
 
 MIT. See [LICENSE](LICENSE).

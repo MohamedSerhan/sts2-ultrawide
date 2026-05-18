@@ -1,0 +1,13 @@
+{
+  "id": "sts2-ultrawide",
+  "pck_name": "sts2-ultrawide",
+  "name": "Ultrawide Support",
+  "author": "MohamedSerhan",
+  "description": "Adds true ultrawide resolution support (up to 5120x1440 / 32:9) with reflowed HUD and widened backgrounds.",
+  "version": "0.1.0",
+  "hasPck": true,
+  "hasDll": true,
+  "affectsGameplay": false,
+  "dependencies": [],
+  "min_game_version": "0.103.2"
+}

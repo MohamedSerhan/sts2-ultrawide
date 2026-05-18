@@ -1,65 +1,66 @@
 using Godot;
+using HarmonyLib;
+using MegaCrit.Sts2.Core.Nodes.Screens.Settings;
 
 namespace SlayTheSpire2Ultrawide;
 
+/// <summary>
+/// Adds ultrawide entries to the game's resolution whitelist via Harmony.
+/// The game's NResolutionDropdown.PopulateDropdownItems() reads from the static
+/// GetResolutionWhiteList(); postfix-patching that method makes our entries
+/// survive every repopulation (settings reopen, window-mode change, etc.).
+/// </summary>
 internal sealed class ResolutionUnlocker
 {
-    private readonly Config _config;
-    private readonly HashSet<ulong> _injected = new();
+    private static readonly Harmony _harmony = new(Mod.ModId + ".resolution");
 
-    public ResolutionUnlocker(Config config) { _config = config; }
+    public ResolutionUnlocker(Config _) { }
 
-    /// <summary>Walk the existing scene tree once — for dropdowns created before our subscription.</summary>
-    public void ScanExistingTree(Node root)
+    public void ApplyPatches()
     {
-        TryInject(root);
-        foreach (var child in root.GetChildren()) ScanExistingTree(child);
+        var target = AccessTools.Method(typeof(NResolutionDropdown), "GetResolutionWhiteList");
+        if (target is null)
+        {
+            Mod.Log("could not find NResolutionDropdown.GetResolutionWhiteList - resolution unlock disabled", error: true);
+            return;
+        }
+
+        var postfix = AccessTools.Method(typeof(ResolutionUnlocker), nameof(WhitelistPostfix));
+        _harmony.Patch(target, postfix: new HarmonyMethod(postfix));
+        Mod.Log("patched NResolutionDropdown.GetResolutionWhiteList");
+
+        // Also patch DoesResolutionFit so the game can't filter ours out via the
+        // boundary check. Postfix forces "fits" for any of our ladder entries.
+        var fitMethod = AccessTools.Method(typeof(NResolutionDropdown), "DoesResolutionFit");
+        if (fitMethod is not null)
+        {
+            var fitPostfix = AccessTools.Method(typeof(ResolutionUnlocker), nameof(FitPostfix));
+            _harmony.Patch(fitMethod, postfix: new HarmonyMethod(fitPostfix));
+            Mod.Log("patched NResolutionDropdown.DoesResolutionFit");
+        }
     }
 
-    public void OnNodeAdded(Node node) => TryInject(node);
-
-    private void TryInject(Node node)
+    public static void WhitelistPostfix(ref List<Vector2I> __result)
     {
-        if (node is not OptionButton ob) return;
-        if (_injected.Contains(ob.GetInstanceId())) return;
-        if (!LooksLikeResolutionDropdown(ob)) return;
-
-        var screenSize = DisplayServer.ScreenGetSize();
-        var added = 0;
+        var seen = new HashSet<Vector2I>(__result);
         foreach (var (w, h) in AspectMath.ResolutionLadder())
         {
-            if (w > screenSize.X || h > screenSize.Y) continue;
-            var label = $"{w} x {h}";
-            var existing = false;
-            for (int i = 0; i < ob.ItemCount; i++)
-            {
-                if (ob.GetItemText(i) == label) { existing = true; break; }
-            }
-            if (existing) continue;
-            ob.AddItem(label);
-            ob.SetItemMetadata(ob.ItemCount - 1, new Vector2I(w, h));
-            added++;
+            var entry = new Vector2I(w, h);
+            if (seen.Add(entry)) __result.Add(entry);
         }
-        _injected.Add(ob.GetInstanceId());
-        Mod.Log($"injected {added} ultrawide entries into {ob.GetPath()} (screen {screenSize.X}x{screenSize.Y}, {ob.ItemCount} items total)");
+        Mod.Log($"whitelist now has {__result.Count} entries");
     }
 
-    /// <summary>
-    /// Heuristic: the resolution dropdown is the OptionButton whose entries look like resolutions
-    /// (one of them is the canonical "1920 x 1080" fingerprint), or whose path/name contains "resolution".
-    /// </summary>
-    private static bool LooksLikeResolutionDropdown(OptionButton ob)
+    public static void FitPostfix(Vector2I resolution, Vector2I boundaryResolution, ref bool __result)
     {
-        var path = ob.GetPath().ToString().ToLowerInvariant();
-        var name = ob.Name.ToString().ToLowerInvariant();
-        if (path.Contains("resolution") || name.Contains("resolution") || name.Contains("windowed")) return true;
-
-        // Content fingerprint — vanilla list always contains 1920 x 1080.
-        for (int i = 0; i < ob.ItemCount; i++)
+        if (__result) return; // already accepted
+        foreach (var (w, h) in AspectMath.ResolutionLadder())
         {
-            var text = ob.GetItemText(i);
-            if (text == "1920 x 1080" || text == "1920x1080") return true;
+            if (resolution.X == w && resolution.Y == h)
+            {
+                __result = true;
+                return;
+            }
         }
-        return false;
     }
 }

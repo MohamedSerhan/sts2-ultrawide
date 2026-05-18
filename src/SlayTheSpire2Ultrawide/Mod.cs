@@ -32,6 +32,7 @@ public static class Mod
 
             _rules = LoadAnchorRules();
             _resolution = new ResolutionUnlocker(_config);
+            _resolution.ApplyPatches();
             _viewport = new ViewportAdjuster(_config);
             _hud = new HudReanchorer(_config, _rules);
             _background = new BackgroundSwapper(_config);
@@ -44,8 +45,7 @@ public static class Mod
                 {
                     tree.Root.SizeChanged += OnViewportSizeChanged;
                     OnViewportSizeChanged();
-                    // Scan nodes that already exist (e.g. main-menu UI added before our subscription).
-                    _resolution?.ScanExistingTree(tree.Root);
+                    // Scan existing scene tree (HUD nodes may already exist).
                     _hud?.ApplyToSubtree(tree.Root);
                 }
             }
@@ -77,7 +77,6 @@ public static class Mod
     {
         try
         {
-            _resolution?.OnNodeAdded(node);
             _hud?.ApplyToSubtree(node);
             if (Engine.GetMainLoop() is SceneTree tree && tree.Root is not null)
             {

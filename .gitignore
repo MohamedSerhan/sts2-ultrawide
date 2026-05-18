@@ -18,6 +18,10 @@ export_credentials.cfg
 *.user
 *.suo
 
+# referenced game/mod DLLs are local-only
+src/lib/*.dll
+src/lib/*.pdb
+
 # secrets — never commit
 .env
 .env.*

@@ -1,0 +1,53 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '9.0.x'
+
+      - name: Restore vendored game DLLs from secrets
+        shell: pwsh
+        env:
+          GODOT_SHARP_B64: ${{ secrets.VENDOR_GODOTSHARP_DLL_B64 }}
+          STS2_B64:        ${{ secrets.VENDOR_STS2_DLL_B64 }}
+          HARMONY_B64:     ${{ secrets.VENDOR_HARMONY_DLL_B64 }}
+        run: |
+          if (-not $env:GODOT_SHARP_B64) {
+            Write-Host "Vendor DLL secrets not configured - skipping build, running pure unit tests only."
+            "skip_build=true" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+            return
+          }
+          New-Item -ItemType Directory -Force src/lib | Out-Null
+          [IO.File]::WriteAllBytes("src/lib/GodotSharp.dll", [Convert]::FromBase64String($env:GODOT_SHARP_B64))
+          [IO.File]::WriteAllBytes("src/lib/sts2.dll",       [Convert]::FromBase64String($env:STS2_B64))
+          [IO.File]::WriteAllBytes("src/lib/0Harmony.dll",   [Convert]::FromBase64String($env:HARMONY_B64))
+
+      - name: Build
+        shell: pwsh
+        run: |
+          if (Test-Path src/lib/GodotSharp.dll) {
+            dotnet build src/sts2-ultrawide.sln -c Release
+          } else {
+            Write-Host "Skipping full build (no vendor DLLs)."
+          }
+
+      - name: Test
+        shell: pwsh
+        run: |
+          if (Test-Path src/lib/GodotSharp.dll) {
+            dotnet test src/sts2-ultrawide.sln -c Release --no-build
+          } else {
+            Write-Host "Tests skipped - require vendored game DLLs."
+          }

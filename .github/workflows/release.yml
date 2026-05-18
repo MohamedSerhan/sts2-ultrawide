@@ -1,0 +1,87 @@
+name: release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '9.0.x'
+
+      - name: Setup Godot
+        uses: chickensoft-games/setup-godot@v2
+        with:
+          version: 4.6.2
+          use-dotnet: false
+
+      # The mod references three DLLs shipped with the game:
+      # GodotSharp.dll, sts2.dll, 0Harmony.dll. We do NOT commit
+      # them to the public repo (sts2.dll is Mega Crit's proprietary
+      # code). Store base64-encoded copies as repo secrets and
+      # write them out before the build.
+      - name: Restore vendored game DLLs from secrets
+        shell: pwsh
+        env:
+          GODOT_SHARP_B64: ${{ secrets.VENDOR_GODOTSHARP_DLL_B64 }}
+          STS2_B64:        ${{ secrets.VENDOR_STS2_DLL_B64 }}
+          HARMONY_B64:     ${{ secrets.VENDOR_HARMONY_DLL_B64 }}
+        run: |
+          if (-not $env:GODOT_SHARP_B64 -or -not $env:STS2_B64 -or -not $env:HARMONY_B64) {
+            throw "Missing one of VENDOR_GODOTSHARP_DLL_B64 / VENDOR_STS2_DLL_B64 / VENDOR_HARMONY_DLL_B64 secrets. See docs/SETUP.md."
+          }
+          New-Item -ItemType Directory -Force src/lib | Out-Null
+          [IO.File]::WriteAllBytes("src/lib/GodotSharp.dll", [Convert]::FromBase64String($env:GODOT_SHARP_B64))
+          [IO.File]::WriteAllBytes("src/lib/sts2.dll",       [Convert]::FromBase64String($env:STS2_B64))
+          [IO.File]::WriteAllBytes("src/lib/0Harmony.dll",   [Convert]::FromBase64String($env:HARMONY_B64))
+
+      - name: Build
+        run: dotnet build src/sts2-ultrawide.sln -c Release
+
+      - name: Test
+        run: dotnet test src/sts2-ultrawide.sln -c Release --no-build
+
+      - name: Export PCK
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force out | Out-Null
+          godot --headless --import --path godot_project
+          godot --headless --path godot_project --export-pack "ModPCK" "$PWD/out/sts2-ultrawide.pck"
+
+      - name: Package
+        shell: pwsh
+        run: ./scripts/package.ps1
+
+      - name: Derive version
+        id: ver
+        shell: pwsh
+        run: |
+          $v = "${{ github.ref_name }}".TrimStart('v')
+          "version=$v" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: out/sts2-ultrawide-*.zip
+          generate_release_notes: true
+
+      - name: Upload to Nexus Mods
+        if: ${{ secrets.NEXUS_API_KEY != '' && secrets.NEXUS_MOD_ID != '' }}
+        uses: Nexus-Mods/upload-action@v1
+        with:
+          api-key:          ${{ secrets.NEXUS_API_KEY }}
+          game-domain:      ${{ secrets.NEXUS_GAME_DOMAIN }}
+          mod-id:           ${{ secrets.NEXUS_MOD_ID }}
+          version:          ${{ steps.ver.outputs.version }}
+          file-path:        out/sts2-ultrawide-${{ steps.ver.outputs.version }}.zip
+          file-name:        "sts2-ultrawide-${{ steps.ver.outputs.version }}.zip"
+          file-description: "v${{ steps.ver.outputs.version }} - see the GitHub release for changelog."

@@ -1,0 +1,25 @@
+# build outputs
+bin/
+obj/
+out/
+dist/
+*.pck
+!assets/**/*.pck
+
+# Godot
+.godot/
+.import/
+export.cfg
+export_credentials.cfg
+
+# IDE
+.vs/
+.idea/
+*.user
+*.suo
+
+# secrets — never commit
+.env
+.env.*
+*.key
+nexus_api_key*

@@ -54,11 +54,17 @@ public static class Mod
                 Log("main loop is not a SceneTree; cannot wire scene hooks", error: true);
             }
 
-            Log("initialization complete");
+            Log($"initialization complete (verbose={_config.VerboseLog}, debug_overlay={_config.DebugOverlay})");
+            Log($"primary screen size: {DisplayServer.ScreenGetSize()}, screen count: {DisplayServer.GetScreenCount()}");
+            for (int i = 0; i < DisplayServer.GetScreenCount(); i++)
+            {
+                Log($"  screen {i}: size={DisplayServer.ScreenGetSize(i)}, position={DisplayServer.ScreenGetPosition(i)}");
+            }
         }
         catch (Exception ex)
         {
             GD.PrintErr($"[{ModId}] init failed: {ex}");
+            WriteToFile($"[{ModId}] init failed: {ex}", error: true);
         }
     }
 
@@ -116,11 +122,39 @@ public static class Mod
         return System.IO.Path.Combine(dir, "config.toml");
     }
 
+    private static string? _logFilePath;
+    private static readonly object _logLock = new();
+
     internal static void Log(string msg, bool error = false)
     {
         var line = $"[{ModId}] {msg}";
         if (error) GD.PrintErr(line);
         else if (_config.VerboseLog) GD.Print(line);
         else GD.PrintRich($"[color=cyan]{line}[/color]");
+        WriteToFile(line, error);
+    }
+
+    private static void WriteToFile(string line, bool error)
+    {
+        try
+        {
+            if (_logFilePath is null)
+            {
+                var dir = System.IO.Path.GetDirectoryName(GetConfigPath())!;
+                _logFilePath = System.IO.Path.Combine(dir, "sts2-ultrawide.log");
+                lock (_logLock)
+                {
+                    System.IO.File.WriteAllText(_logFilePath,
+                        $"--- sts2-ultrawide log start {DateTime.Now:yyyy-MM-dd HH:mm:ss} ---\n");
+                }
+            }
+            var stamp = DateTime.Now.ToString("HH:mm:ss.fff");
+            var prefix = error ? "ERR " : "    ";
+            lock (_logLock)
+            {
+                System.IO.File.AppendAllText(_logFilePath, $"{stamp} {prefix}{line}\n");
+            }
+        }
+        catch { /* never let logging crash the mod */ }
     }
 }
